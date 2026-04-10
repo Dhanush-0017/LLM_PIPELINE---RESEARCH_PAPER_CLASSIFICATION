@@ -1,26 +1,47 @@
 # Research Paper Analysis Pipeline
 
-Classifies LLM research papers from PDF — extracts key sections and uses a local LLM (Ollama) to classify each paper as **LLM Efficiency**, **LLM Scaling**, or **Other**.
+A pipeline that reads LLM research papers (PDF) and automatically classifies them using an AI model.
+
+> **What does it do?**
+> You give it a folder of research papers. It reads each paper, understands what it's about, and tells you whether the paper is focused on making AI models more **efficient** (cheaper/faster) or more **capable** through **scaling** (bigger/smarter).
+
+---
+
+## How It Works
+
+```
+PDF Paper
+    ↓
+1. pdf_extractor.py   → Reads the PDF and pulls out the key sections
+                        (Title, Abstract, Introduction, Conclusion)
+    ↓
+2. classifier.py      → Sends those sections to an AI model (LLM)
+                        and runs a two-step classification
+    ↓
+3. prompts.py         → Contains the instructions given to the AI
+                        and reads back its answers
+    ↓
+Result → Saved to results/results.csv and results/results.json
+```
 
 ---
 
 ## Project Structure
 
 ```
-├── main.py                   # Entry point — run this to process all papers
-├── requirements.txt          # Python dependencies
-├── .gitignore                # Excludes generated files from git
+├── main.py                   # Run this to start the pipeline
+├── requirements.txt          # Python packages needed
+├── .gitignore                # Files excluded from git
 ├── pipeline/
-│   ├── pdf_extractor.py      # Extracts title, abstract, introduction, conclusion from PDFs
-│   ├── classifier.py         # Calls Ollama, runs two-stage LLM classification, saves results
-│   └── prompts.py            # LLM prompts and response parsers
+│   ├── pdf_extractor.py      # Step 1 - reads and extracts text from PDFs
+│   ├── classifier.py         # Step 2 - sends text to AI and classifies
+│   └── prompts.py            # Step 3 - AI prompts and response readers
 ├── papers/
-│   ├── pdf/                  # ← Place your input PDF files here
-│   └── clean_text/           # Auto-generated: extracted text per paper (for inspection)
-├── output/                   # Auto-generated: per-paper JSON with chunks + classification
+│   └── pdf/                  # ← Put your PDF files here
+├── output/                   # Auto-generated: one JSON file per paper
 └── results/
-    ├── results.csv           # Final results — open this after each run
-    └── results.json          # Detailed results with reasoning and confidence
+    ├── results.csv           # Final results table
+    └── results.json          # Detailed results with reasoning
 ```
 
 ---
@@ -32,17 +53,19 @@ Classifies LLM research papers from PDF — extracts key sections and uses a loc
 pip install -r requirements.txt
 ```
 
-**2. Configure Ollama**
+**2. Configure the AI server**
 
-Update these two lines in `pipeline/classifier.py` to point to your Ollama server:
+Open `pipeline/classifier.py` and update these two lines to point to your server:
 ```python
 OLLAMA_URL   = "http://<your-host>:<port>/api/generate"
 OLLAMA_MODEL = "gpt-oss:120b"
 ```
 
-**3. Add PDFs**
+> If you don't know these values, ask your professor or supervisor for the server address.
 
-Place your research paper PDFs inside `papers/pdf/`.
+**3. Add your PDF files**
+
+Copy your research paper PDFs into the `papers/pdf/` folder.
 
 ---
 
@@ -52,75 +75,69 @@ Place your research paper PDFs inside `papers/pdf/`.
 python main.py
 ```
 
-Already classified papers are **skipped automatically** — only new or failed papers are processed on each run.
-
-**What happens:**
-1. Scans `papers/pdf/` for PDF files
-2. Skips papers that are already successfully classified
-3. Extracts Title, Abstract, Introduction, Conclusion from each PDF
-4. Saves extracted text to `papers/clean_text/<paper_id>.txt`
-5. Saves structured chunks to `output/<paper_id>.json`
-6. Runs two-stage LLM classification on each paper
-7. Writes final results to `results/results.csv` and `results/results.json`
+- Every paper is **re-classified on every run**
+- Failed papers are marked as `ERROR` in the output
 
 ---
 
-## Output
+## Understanding the Results
 
-### results.csv
+Open `results/results.csv` after the run. You'll see:
 
-| Column | Description |
+| Column | What it means |
 |---|---|
-| `paper_id` | ArXiv ID or filename — use this to look up the paper |
-| `title` | Paper title extracted from the PDF |
-| `classification` | Category assigned by the LLM |
-| `accuracy` | LLM confidence score (0–100%) |
-| `justification` | 2–3 sentence explanation of why the paper was classified this way |
+| `paper_id` | The paper's filename or ArXiv ID |
+| `title` | Title of the paper |
+| `classification` | What category the AI assigned |
+| `accuracy` | How confident the AI is (0–100%) |
+| `justification` | Why the AI chose that category |
 
-### Classification
+### Categories
 
-Papers are classified using a **two-stage** approach:
-
-**Stage 1** — Quick screen:
-- `A` = LLM Efficiency
-- `B` = LLM Scaling
-- `C` = Other
-
-**Stage 2A** (for A/B papers) — Confirms Efficiency vs Scaling with deep reasoning.
-
-**Stage 2B** (for C papers) — Assigns a short label: `Other — Model Architecture`, `Other — Training & Alignment`, etc.
-
-| Category | What it means |
+| Category | Meaning |
 |---|---|
-| `LLM Efficiency` | Makes LLMs cheaper, faster, or smaller (quantization, pruning, LoRA, distillation, efficient attention) |
-| `LLM Scaling` | Makes LLMs more capable through scale (scaling laws, larger models, emergent abilities) |
-| `Other — ...` | Neither efficiency nor scaling — label describes what it actually is |
+| `LLM Efficiency` | The paper is about making AI models cheaper, faster, or smaller to run |
+| `LLM Scaling` | The paper is about making AI models more powerful by training bigger models |
+| `Other — ...` | The paper is about something else (e.g. benchmarks, new architectures, alignment) |
 
-Papers below **75% confidence** are flagged with `⚑ NEEDS REVIEW` in the terminal.
+> Papers with confidence **below 75%** are flagged with `⚑ NEEDS REVIEW` in the terminal — these should be checked manually.
 
 ---
 
-## Pipeline Modules
+## How Classification Works
 
-### `pipeline/pdf_extractor.py`
-- Opens PDFs with **PyMuPDF**
-- Extracts title using font-size detection (falls back to PDF metadata)
-- Extracts Abstract, Introduction, Conclusion using regex with multiple pattern variants and position-based fallbacks
-- Warns in the terminal if any section could not be found
+The AI classifies each paper in **two steps**:
 
-### `pipeline/classifier.py`
-- Calls Ollama with **temperature=0** (deterministic — same paper always gets the same result)
-- Retries up to **3 times** on failure with a 5s delay
-- Papers that fail all retries are marked `ERROR` and retried on the next run
+**Step 1 — Quick Screen**
+The AI does a fast read and decides:
+- Is this paper about **Efficiency**? (making models cheaper/faster)
+- Is this paper about **Scaling**? (making models bigger/smarter)
+- Or is it about something **else**?
 
-### `pipeline/prompts.py`
-- Defines the three LLM prompts: `STAGE1_PROMPT`, `STAGE2A_PROMPT`, `STAGE2B_PROMPT`
-- Parses LLM responses using regex to handle formatting variations
+**Step 2 — Deep Classification**
+Based on Step 1, the AI does a deeper analysis:
+- For Efficiency/Scaling papers → confirms or corrects the Step 1 result with full reasoning
+- For Other papers → assigns a short descriptive label (e.g. `Other — Benchmark / Evaluation`)
+
+This two-step approach improves accuracy by giving the AI a chance to reconsider its first answer.
+
+---
+
+## Troubleshooting
+
+**The pipeline shows `ERROR` for a paper**
+> The AI server was unreachable or timed out. The paper will be retried automatically on the next run. Check that your server URL is correct.
+
+**A paper shows low confidence (below 75%)**
+> The AI was unsure about the classification. Review it manually — the justification column will explain why.
+
+**No PDFs found**
+> Make sure your PDF files are inside the `papers/pdf/` folder.
 
 ---
 
 ## Requirements
 
 - Python 3.10+
-- A running [Ollama](https://ollama.com) instance accessible from your machine
+- Access to an Ollama server (ask your supervisor for the server address)
 - PDF files placed in `papers/pdf/`

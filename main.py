@@ -82,7 +82,7 @@ def save_results(data):
 
     file_exists = os.path.isfile(csv_path)
     try:
-        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+        with open(csv_path, "a", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=HEADERS)
             if not file_exists:
                 writer.writeheader()
@@ -115,17 +115,13 @@ def process(pdf_path, index, total):
     print(f"  {c(f'[{index}/{total}]', GRAY)}  {c(os.path.basename(pdf_path), BOLD, WHITE)}")
     print(c("  " + "─" * 54, GRAY))
 
-    if is_already_processed(paper_id):
-        print(c("  already classified — skipping", GRAY))
-        return True, False, False
-
     print(f"  {'chunking':<14}", end="", flush=True)
     chunks, title = process_pdf(pdf_path, paper_id=paper_id)
     print(c(f"  {len(chunks)} chunk(s)", DIM))
 
     print(f"  {'classifying':<14}", end="", flush=True)
     data, skipped = summarize_paper(paper_id)
-    print(c("  cached", GRAY) if skipped else c("  done", GREEN))
+    print(c("  done", GREEN))
 
     clf        = data.get("classification", {})
     category   = clf.get("category", "N/A")

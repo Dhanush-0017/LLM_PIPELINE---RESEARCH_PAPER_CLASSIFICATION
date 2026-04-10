@@ -132,9 +132,6 @@ def process_paper(paper_id: str) -> tuple[dict, bool]:
     """
     data = load_chunks(paper_id)
 
-    if is_already_processed(data):
-        return data, True  # already classified, skip
-
     paper_input = build_input(data)
 
     # ── Stage 1: quick efficiency / scaling / other screen ────────────────────
