@@ -5,8 +5,14 @@ import json
 import glob
 import textwrap
 
+import importlib
+
 from pipeline.pdf_extractor import process_pdf
 from pipeline.classifier    import process_paper as summarize_paper
+
+_fetcher = importlib.import_module("1_paper_download_onef")
+get_filtered_papers_exact_count = _fetcher.get_filtered_papers_exact_count
+download_pdf_for_paper          = _fetcher.download_pdf_for_paper
 
 PAPERS_DIR     = "papers/pdf"
 OUTPUT_DIR     = "output"
@@ -38,6 +44,38 @@ def conf_bar(confidence):
     filled = round(val / 100 * 16)
     colour = GREEN if val >= 80 else YELLOW if val >= 50 else RED
     return c("█" * filled + "░" * (16 - filled), colour) + c(f"  {val}%", BOLD)
+
+
+# ── Fetch papers from arXiv ───────────────────────────────────────────────────
+def fetch_papers(query, count, year_min, year_max):
+    print()
+    print(f"  {c('fetching papers from arXiv', BOLD, WHITE)}")
+    print(c("  " + "─" * 54, GRAY))
+    print(f"  query      {c(query, CYAN)}")
+    print(f"  count      {c(count, CYAN, BOLD)}")
+    print(f"  years      {c(f'{year_min} – {year_max}', CYAN)}")
+    print()
+
+    papers = get_filtered_papers_exact_count(
+        query=query,
+        target_count=count,
+        year_min=year_min,
+        year_max=year_max,
+        cite_min=0,
+    )
+
+    print(f"  {c(str(len(papers)), CYAN, BOLD)} paper(s) found")
+    print()
+
+    for i, paper in enumerate(papers, start=1):
+        print(f"  {c(f'[{i}/{len(papers)}]', GRAY)}  {c(paper['title'], WHITE)}", end="  ", flush=True)
+        try:
+            download_pdf_for_paper(paper, output_dir=PAPERS_DIR)
+            print(c("downloaded", GREEN))
+        except (RuntimeError, ValueError) as e:
+            print(c(f"failed — {e}", RED))
+
+    print()
 
 
 # ── File helpers ──────────────────────────────────────────────────────────────
@@ -153,6 +191,15 @@ def main():
     if sys.platform == "win32":
         os.system("")
 
+    # ── Step 1: Fetch papers from arXiv ──────────────────────────────────────
+    fetch_papers(
+        query    = "LLM efficiency scaling",
+        count    = 10,
+        year_min = 2020,
+        year_max = 2026,
+    )
+
+    # ── Step 2: Classify all downloaded PDFs ──────────────────────────────────
     print()
     print(f"  {c('research paper analysis', BOLD, WHITE)}")
     print(c("  " + "─" * 54, GRAY))
