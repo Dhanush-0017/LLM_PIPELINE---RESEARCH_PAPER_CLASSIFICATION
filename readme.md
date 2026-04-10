@@ -9,10 +9,11 @@ Classifies LLM research papers from PDF — extracts key sections and uses a loc
 ```
 ├── main.py                   # Entry point — run this to process all papers
 ├── requirements.txt          # Python dependencies
+├── .gitignore                # Excludes generated files from git
 ├── pipeline/
-│   ├── chunker.py            # Extracts title, abstract, introduction, conclusion from PDFs
-│   ├── classifier.py         # LLM prompts and response parser
-│   └── summarizer.py         # Calls Ollama, runs two-stage classification, saves results
+│   ├── pdf_extractor.py      # Extracts title, abstract, introduction, conclusion from PDFs
+│   ├── classifier.py         # Calls Ollama, runs two-stage LLM classification, saves results
+│   └── prompts.py            # LLM prompts and response parsers
 ├── papers/
 │   ├── pdf/                  # ← Place your input PDF files here
 │   └── clean_text/           # Auto-generated: extracted text per paper (for inspection)
@@ -33,7 +34,7 @@ pip install -r requirements.txt
 
 **2. Configure Ollama**
 
-Update these two lines in `pipeline/summarizer.py` to point to your Ollama server:
+Update these two lines in `pipeline/classifier.py` to point to your Ollama server:
 ```python
 OLLAMA_URL   = "http://<your-host>:<port>/api/generate"
 OLLAMA_MODEL = "gpt-oss:120b"
@@ -51,15 +52,16 @@ Place your research paper PDFs inside `papers/pdf/`.
 python main.py
 ```
 
-Every run starts completely fresh — all previous output is cleared and every paper is re-processed from scratch.
+Already classified papers are **skipped automatically** — only new or failed papers are processed on each run.
 
 **What happens:**
 1. Scans `papers/pdf/` for PDF files
-2. Extracts Title, Abstract, Introduction, Conclusion from each PDF
-3. Saves extracted text to `papers/clean_text/<paper_id>.txt`
-4. Saves structured chunks to `output/<paper_id>.json`
-5. Runs two-stage LLM classification on each paper
-6. Writes final results to `results/results.csv` and `results/results.json`
+2. Skips papers that are already successfully classified
+3. Extracts Title, Abstract, Introduction, Conclusion from each PDF
+4. Saves extracted text to `papers/clean_text/<paper_id>.txt`
+5. Saves structured chunks to `output/<paper_id>.json`
+6. Runs two-stage LLM classification on each paper
+7. Writes final results to `results/results.csv` and `results/results.json`
 
 ---
 
@@ -100,20 +102,20 @@ Papers below **75% confidence** are flagged with `⚑ NEEDS REVIEW` in the termi
 
 ## Pipeline Modules
 
-### `pipeline/chunker.py`
+### `pipeline/pdf_extractor.py`
 - Opens PDFs with **PyMuPDF**
 - Extracts title using font-size detection (falls back to PDF metadata)
 - Extracts Abstract, Introduction, Conclusion using regex with multiple pattern variants and position-based fallbacks
 - Warns in the terminal if any section could not be found
 
 ### `pipeline/classifier.py`
-- Defines the three LLM prompts: `STAGE1_PROMPT`, `STAGE2A_PROMPT`, `STAGE2B_PROMPT`
-- Parses LLM responses using regex to handle formatting variations
-
-### `pipeline/summarizer.py`
 - Calls Ollama with **temperature=0** (deterministic — same paper always gets the same result)
 - Retries up to **3 times** on failure with a 5s delay
 - Papers that fail all retries are marked `ERROR` and retried on the next run
+
+### `pipeline/prompts.py`
+- Defines the three LLM prompts: `STAGE1_PROMPT`, `STAGE2A_PROMPT`, `STAGE2B_PROMPT`
+- Parses LLM responses using regex to handle formatting variations
 
 ---
 
