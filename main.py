@@ -5,8 +5,8 @@ import json
 import glob
 import textwrap
 
-from pipeline.chunker    import process_pdf
-from pipeline.summarizer import process_paper as summarize_paper
+from pipeline.pdf_extractor import process_pdf
+from pipeline.classifier    import process_paper as summarize_paper
 
 PAPERS_DIR     = "papers/pdf"
 OUTPUT_DIR     = "output"
@@ -49,17 +49,20 @@ def get_pdf_files():
     return pdfs
 
 
-def clear_all():
-    """Wipe all generated files so every run starts completely fresh."""
-    for f in glob.glob(os.path.join(OUTPUT_DIR, "*.json")):
-        os.remove(f)
-    for f in glob.glob(os.path.join(CLEAN_TEXT_DIR, "*.txt")):
-        os.remove(f)
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    for f in ["results.csv", "results.json"]:
-        path = os.path.join(RESULTS_DIR, f)
-        if os.path.isfile(path):
-            os.remove(path)
+def is_already_processed(paper_id: str) -> bool:
+    """Check if a paper has already been classified successfully.
+    Skips reprocessing unless the result was an ERROR.
+    """
+    output_path = os.path.join(OUTPUT_DIR, f"{paper_id}.json")
+    if not os.path.isfile(output_path):
+        return False
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        category = data.get("classification", {}).get("category", "").strip()
+        return bool(category) and category != "ERROR"
+    except (json.JSONDecodeError, IOError):
+        return False
 
 
 def save_results(data):
@@ -112,6 +115,10 @@ def process(pdf_path, index, total):
     print(f"  {c(f'[{index}/{total}]', GRAY)}  {c(os.path.basename(pdf_path), BOLD, WHITE)}")
     print(c("  " + "─" * 54, GRAY))
 
+    if is_already_processed(paper_id):
+        print(c("  already classified — skipping", GRAY))
+        return True, False, False
+
     print(f"  {'chunking':<14}", end="", flush=True)
     chunks, title = process_pdf(pdf_path, paper_id=paper_id)
     print(c(f"  {len(chunks)} chunk(s)", DIM))
@@ -156,7 +163,6 @@ def main():
 
     pdfs  = get_pdf_files()
     total = len(pdfs)
-    clear_all()
 
     print(f"  {c(str(total), CYAN, BOLD)} paper(s)  ·  {c(PAPERS_DIR + '/', GRAY)}")
 
