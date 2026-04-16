@@ -83,20 +83,121 @@ def fix_spaced_title(title: str) -> str:
     return title
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def _is_toc_content(text: str) -> bool:
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        return True
+    avg_len = sum(len(l) for l in lines) / len(lines)
+    return avg_len < 30
+
+
+HEADING_PATTERNS = {
+    "abstract":     re.compile(r'(?i)^abstract$'),
+    "introduction": re.compile(r'(?i)^(?:\d+[\.\s]*)?introduction$'),
+    "conclusion":   re.compile(r'(?i)^(?:\d+[\.\s]*)?(?:conclusions?|concluding\s+remarks?|(?:summary|discussion)(?:\s+and\s+conclusions?)?)$'),
+}
+
+MAX_CONCLUSION_LEN = 6000
+
+
+def _extract_by_blocks(doc: fitz.Document) -> dict[str, str]:
+    """Block-based section extraction using font sizes to detect headings.
+
+    Instead of regex on flat text (which breaks on TOC, page numbers, headers),
+    this reads each line's font size. Lines significantly larger than the body
+    text font size are headings. We group body text between headings into sections.
+
+    For conclusion: only accept matches from the second half of the document
+    and cap length at MAX_CONCLUSION_LEN to avoid grabbing the entire paper.
+    """
+    from collections import Counter
+
+    # ── Collect all lines with font size across all pages ─────────────────────
+    all_lines = []  # (page_num, max_font_size, text)
+    total_pages = len(doc)
+
+    for page_num, page in enumerate(doc):
+        for block in page.get_text("dict")["blocks"]:
+            if block.get("type") != 0:
+                continue
+            for line in block.get("lines", []):
+                spans    = line.get("spans", [])
+                text     = " ".join(s["text"] for s in spans).strip()
+                max_size = max((s["size"] for s in spans), default=0)
+                if text:
+                    all_lines.append((page_num, max_size, text))
+
+    if not all_lines:
+        return {"abstract": "", "introduction": "", "conclusion": ""}
+
+    # ── Find body text font size (most common rounded size) ───────────────────
+    size_counts  = Counter(round(size) for _, size, _ in all_lines)
+    body_size    = size_counts.most_common(1)[0][0]
+    heading_threshold = body_size + 1.5
+
+    # ── Walk lines, group text between section headings ───────────────────────
+    sections        = {"abstract": "", "introduction": "", "conclusion": ""}
+    current_section = None
+    buffer          = []
+
+    def _flush(section, buf, page_num):
+        if not section or not buf:
+            return
+        content = "\n".join(buf).strip()
+        if len(content) < MIN_SECTION_LEN:
+            return
+        if section == "conclusion":
+            # Only accept conclusion from second half of document
+            if page_num < total_pages // 2:
+                return
+            content = content[:MAX_CONCLUSION_LEN]
+            sections[section] = content  # always overwrite — take last match
+        else:
+            if not sections[section]:    # take first valid match
+                sections[section] = content
+
+    caption_threshold = body_size - 1.0
+
+    for page_num, size, text in all_lines:
+        clean = text.strip()
+
+        # Skip figure captions, footnotes, page numbers — smaller than body text
+        if size < caption_threshold:
+            continue
+
+        if size >= heading_threshold:
+            matched = next((name for name, pat in HEADING_PATTERNS.items() if pat.match(clean)), None)
+            if matched:
+                _flush(current_section, buffer, page_num)
+                current_section = matched
+                buffer = []
+                continue
+
+        if current_section:
+            buffer.append(clean)
+
+    _flush(current_section, buffer, total_pages - 1)
+    return sections
+
+
 # ── Step 3: Extract Abstract, Introduction, and Conclusion ────────────────────
-def extract_sections(full_text: str) -> dict[str, str]:
+def extract_sections(full_text: str, doc: fitz.Document) -> dict[str, str]:
     """Extract the three most important sections from the paper text.
 
-    Uses multiple regex patterns per section to handle the many ways
-    academic papers format their headings (e.g. "1. Introduction",
-    "I. Introduction", "Concluding Remarks", "Summary", etc.).
-
-    Falls back to position-based extraction if no heading is found.
+    Strategy:
+    1. Block-based extraction (primary) — uses font sizes to detect headings.
+       Much more reliable than regex on flat text because it is immune to TOC,
+       page numbers, headers, and footers.
+    2. Regex fallback (secondary) — for any section the block approach missed,
+       falls back to the original regex patterns on the flat text string.
+    3. Abstract position fallback (last resort) — finds the first dense
+       paragraph before the introduction for papers with no "Abstract" heading.
     """
-    sections = {"abstract": "", "introduction": "", "conclusion": ""}
+    # ── Primary: block-based extraction ──────────────────────────────────────
+    sections = _extract_by_blocks(doc)
 
     # ── Abstract ──────────────────────────────────────────────────────────────
-    # Try patterns from most common to least common heading format.
     abstract_patterns = [
         # "Abstract" on its own line followed by the body
         r'(?i)\babstract\b\s*\n(.*?)(?=\n\s*(?:\d+[\.\s]|[IVX]+[\.\s]|introduction\b|keywords?\b|\Z))',
@@ -106,27 +207,33 @@ def extract_sections(full_text: str) -> dict[str, str]:
         r'(?i)\bA\s*B\s*S\s*T\s*R\s*A\s*C\s*T\b\s*\n(.*?)(?=\n\s*(?:\d+[\.\s]|introduction\b|\Z))',
     ]
     for pattern in abstract_patterns:
-        m = re.search(pattern, full_text, re.DOTALL)
-        if m:
+        # Find all matches and pick the first one that isn't TOC content
+        for m in re.finditer(pattern, full_text, re.DOTALL):
             text = m.group(1).strip()
-            if len(text) >= MIN_SECTION_LEN:
+            if len(text) >= MIN_SECTION_LEN and not _is_toc_content(text):
                 sections["abstract"] = text
                 break
+        if sections["abstract"]:
+            break
 
-    # Fallback: find the first dense paragraph in the opening 3000 characters.
-    # Most papers place the abstract at the very top, so this works well.
+    # Fallback: find the first dense paragraph before the introduction.
+    # Catches ACM/IEEE papers where the abstract has no "Abstract" heading.
     if not sections["abstract"]:
-        for m in re.finditer(r'\n\n(.{100,1500}?)\n\n', full_text[:3000], re.DOTALL):
+        intro_start = re.search(r'(?i)\n\s*(?:\d+\.?\s+|[IVX]+\.?\s+)?introduction\b', full_text)
+        search_end  = intro_start.start() if intro_start else 6000
+        search_text = full_text[:search_end]
+
+        for m in re.finditer(r'\n\n(.{100,2000}?)\n\n', search_text, re.DOTALL):
             candidate = m.group(1).strip()
             lines     = candidate.splitlines()
             avg_len   = sum(len(l) for l in lines) / max(len(lines), 1)
-            # Reject affiliation/address blocks which have many short lines
-            if avg_len > 40:
+            if avg_len > 40 and not re.search(r'(https?://|doi\.org|©|copyright|acm|ieee)', candidate, re.IGNORECASE):
                 sections["abstract"] = candidate
                 break
 
     # ── Introduction ──────────────────────────────────────────────────────────
     # Handles: "Introduction", "1. Introduction", "1 Introduction", "I. Introduction"
+    # Uses finditer and skips TOC matches — takes the first substantive match.
     intro_patterns = [
         r'(?i)\n\s*(?:\d+\.?\s+|[IVX]+\.?\s+)?introduction\s*\n'
         r'(.*?)'
@@ -134,16 +241,19 @@ def extract_sections(full_text: str) -> dict[str, str]:
         r'methodology\b|preliminaries\b|problem\s+formulation\b))',
     ]
     for pattern in intro_patterns:
-        m = re.search(pattern, full_text, re.DOTALL)
-        if m:
+        for m in re.finditer(pattern, full_text, re.DOTALL):
             text = m.group(1).strip()
-            if len(text) >= MIN_SECTION_LEN:
+            if len(text) >= MIN_SECTION_LEN and not _is_toc_content(text):
                 sections["introduction"] = text
                 break
+        if sections["introduction"]:
+            break
 
     # ── Conclusion ────────────────────────────────────────────────────────────
     # Handles many variations: "Conclusion", "Conclusions", "Concluding Remarks",
     # "Summary and Conclusions", "Discussion and Conclusions", "Summary", "Discussion"
+    # IMPORTANT: uses the LAST valid match — the real conclusion is always at the
+    # end of the paper, not in the TOC or in a mid-paper subsection.
     conclusion_patterns = [
         r'(?i)\n\s*(?:\d+[\.\s]+)?conclusions?\b[^\n]*\n'
         r'(.*?)'
@@ -157,18 +267,29 @@ def extract_sections(full_text: str) -> dict[str, str]:
         r'(.*?)'
         r'(?=\n\s*(?:references\b|bibliography\b|acknowledgem\b)|\Z)',
 
-        # Last resort: standalone "Summary" or "Discussion" section
         r'(?i)\n\s*(?:\d+[\.\s]+)?(?:summary|discussion)\b[^\n]*\n'
         r'(.*?)'
         r'(?=\n\s*(?:references\b|bibliography\b|acknowledgem\b)|\Z)',
     ]
+    doc_midpoint = len(full_text) // 2
+    MAX_CONCLUSION_LEN = 6000
+
     for pattern in conclusion_patterns:
-        m = re.search(pattern, full_text, re.DOTALL)
-        if m:
+        # Collect ALL matches, only from second half of document, take the LAST valid one
+        best = ""
+        for m in re.finditer(pattern, full_text, re.DOTALL):
+            # Skip matches in the first half — those are TOC or mid-paper mentions
+            if m.start() < doc_midpoint:
+                continue
             text = m.group(1).strip()
-            if len(text) >= MIN_SECTION_LEN:
-                sections["conclusion"] = text
-                break
+            # Cap length to avoid grabbing the entire rest of the paper
+            if len(text) > MAX_CONCLUSION_LEN:
+                text = text[:MAX_CONCLUSION_LEN]
+            if len(text) >= MIN_SECTION_LEN and not _is_toc_content(text):
+                best = text
+        if best:
+            sections["conclusion"] = best
+            break
 
     # Fallback: grab the last paragraph before the References section.
     # Most papers end with the conclusion right before references.
@@ -267,7 +388,7 @@ def process_pdf(pdf_path: str, paper_id: str | None = None, title: str | None = 
     if not title:
         title = extract_title(doc, doc.metadata)
 
-    sections = extract_sections(full_text)
+    sections = extract_sections(full_text, doc)
     warn_missing_sections(paper_id, sections)
 
     chunks = chunk_by_section(sections)

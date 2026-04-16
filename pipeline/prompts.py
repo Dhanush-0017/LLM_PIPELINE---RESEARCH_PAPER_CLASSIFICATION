@@ -11,10 +11,7 @@ REVIEW_THRESHOLD = 75
 # Goal: route the paper to the right Stage 2 prompt.
 # Expected output: 2 lines only.
 # ══════════════════════════════════════════════════════════════════════════════
-STAGE1_PROMPT = """You are screening an LLM research paper for a professor whose research question is:
-  "Are recent papers making LLMs more EFFICIENT, or more CAPABLE through SCALE?"
-
-Classify this paper into exactly one of:
+STAGE1_PROMPT = """You are screening an LLM research paper. Classify it into exactly one of:
 
 A - LLM Efficiency  : Primary goal is making LLMs cheaper, faster, or smaller to run.
                       (quantization, pruning, LoRA/PEFT, distillation, efficient attention,
@@ -65,10 +62,7 @@ Reasoning: <one sentence — what the paper does and why it maps to A, B, or C>"
 # Only runs when Stage 1 returned A or B.
 # Focused entirely on the Efficiency vs Scaling distinction.
 # ══════════════════════════════════════════════════════════════════════════════
-STAGE2A_PROMPT = """You are helping a professor classify an LLM research paper.
-The professor's research question: "Is this paper making LLMs more EFFICIENT or more CAPABLE through SCALE?"
-
-Your job: confirm or correct the initial screen, then provide a confident classification.
+STAGE2A_PROMPT = """You are classifying an LLM research paper. Your job: confirm or correct the initial screen, then provide a confident classification.
 
 ---
 TWO CATEGORIES
@@ -120,7 +114,7 @@ Screening note: Initial screen said Efficiency.
 Reasoning: FlashAttention rewrites the attention kernel to be IO-aware, reducing memory reads and speeding up computation without changing the mathematical result. The goal is to make existing Transformer models faster and cheaper — not to scale to larger models. Scaling is ruled out because the paper does not study how performance changes with model size.
 Category: LLM Efficiency
 Confidence: 97
-Justification: FlashAttention's contribution is an IO-aware attention algorithm that reduces memory usage and wall-clock time for exact self-attention. The goal is making existing model sizes cheaper to train and run, not enabling larger models. It is not a scaling paper — no scaling laws, no emergent abilities, no study of capability vs compute. Directly relevant to the professor's efficiency question.
+Justification: FlashAttention's contribution is an IO-aware attention algorithm that reduces memory usage and wall-clock time for exact self-attention. The goal is making existing model sizes cheaper to train and run, not enabling larger models. It is not a scaling paper — no scaling laws, no emergent abilities, no study of capability vs compute.
 
 Example 2 — Clear Scaling
 Title: Scaling Laws for Neural Language Models
@@ -128,7 +122,7 @@ Screening note: Initial screen said Scaling.
 Reasoning: The entire paper studies power-law relationships between model size, data, compute, and loss. There is no efficiency technique proposed. The goal is understanding how to get more capable models through scale, not how to run existing models cheaper.
 Category: LLM Scaling
 Confidence: 98
-Justification: This paper derives empirical scaling laws showing how language model loss improves predictably with model size, dataset size, and compute budget. It answers the question "how much capability do we get per FLOP at scale?" — a core scaling question. No efficiency technique is introduced. Directly central to the professor's scaling question.
+Justification: This paper derives empirical scaling laws showing how language model loss improves predictably with model size, dataset size, and compute budget. It answers the question "how much capability do we get per FLOP at scale?" — a core scaling question. No efficiency technique is introduced.
 
 Example 3 — Ambiguous, Efficiency wins
 Title: LoRA: Low-Rank Adaptation of Large Language Models
@@ -136,7 +130,7 @@ Screening note: Initial screen said Efficiency.
 Reasoning: LoRA reduces fine-tuning memory by training only low-rank matrices, making 175B fine-tuning accessible on commodity hardware. One could argue Training & Alignment since it is a fine-tuning method, but the primary motivation is cost reduction for existing model sizes, not improving model capability.
 Category: LLM Efficiency
 Confidence: 84
-Justification: LoRA's core contribution is making fine-tuning of large models computationally accessible by reducing trainable parameters via low-rank decomposition. The paper's stated goal is cost reduction — not making models more capable. One could argue this is a training method, but the efficiency framing is primary and the professor's efficiency question is directly answered.
+Justification: LoRA's core contribution is making fine-tuning of large models computationally accessible by reducing trainable parameters via low-rank decomposition. The paper's stated goal is cost reduction — not making models more capable. One could argue this is a training method, but the efficiency framing is primary.
 
 Example 4 — Ambiguous, Scaling wins
 Title: LLaMA: Open and Efficient Foundation Language Models
@@ -158,7 +152,7 @@ Reply in this EXACT format — no extra text, no markdown:
 Reasoning: <2-3 sentences — what the paper does, which category wins and why, what argument for the other category you considered and rejected>
 Category: <LLM Efficiency or LLM Scaling>
 Confidence: <0-100>
-Justification: <3 sentences — (1) what the paper contributes specifically, (2) why this category and not the other, (3) how it relates to the professor's research question>"""
+Justification: <3 sentences — (1) what the paper contributes specifically, (2) why this category and not the other, (3) what makes this classification clear or ambiguous>"""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -167,8 +161,7 @@ Justification: <3 sentences — (1) what the paper contributes specifically, (2)
 # These papers are outside the professor's primary interest.
 # Goal: give a short label and one-line explanation — nothing more.
 # ══════════════════════════════════════════════════════════════════════════════
-STAGE2B_PROMPT = """You are helping a professor who is studying LLM efficiency and scaling research.
-This paper has been screened and is NOT about efficiency or scaling.
+STAGE2B_PROMPT = """You are classifying an LLM research paper. This paper has been screened and is NOT about efficiency or scaling.
 
 Your only job: write a short label describing what the paper IS about, and one sentence explaining it.
 
@@ -189,20 +182,20 @@ Title: Training language models to follow instructions with human feedback
 Reasoning: The paper proposes RLHF to align model outputs with human preferences — a training methodology, not efficiency or scaling.
 Category: Other — Training & Alignment
 Confidence: 96
-Justification: This paper introduces RLHF as a training technique to align LLM outputs with human intent. It is outside the professor's efficiency/scaling scope.
+Justification: This paper introduces RLHF as a training technique to align LLM outputs with human intent. It is not an efficiency or scaling contribution.
 
 Title: Attention Is All You Need
 Reasoning: The paper proposes the Transformer — a new sequence model architecture built on self-attention. The architectural design is the contribution, not efficiency or scaling.
 Category: Other — Model Architecture
 Confidence: 98
-Justification: This paper introduces the Transformer architecture, replacing recurrent models with pure self-attention. It is outside the professor's efficiency/scaling scope.
+Justification: This paper introduces the Transformer architecture, replacing recurrent models with pure self-attention. It is not an efficiency or scaling contribution.
 
 ---
 Reply in this EXACT format — no extra text, no markdown:
 Reasoning: <1-2 sentences — what the paper does and why it is not efficiency or scaling>
 Category: Other — <brief topic>
 Confidence: <0-100>
-Justification: <1-2 sentences — what the paper contributes and note it is outside the professor's scope>"""
+Justification: <1-2 sentences — what the paper contributes and why it is not an efficiency or scaling contribution>"""
 
 
 # ── Parsers ───────────────────────────────────────────────────────────────────

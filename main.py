@@ -191,9 +191,15 @@ def main():
     if sys.platform == "win32":
         os.system("")
 
+    # ── Clear previous results ────────────────────────────────────────────────
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    for f in [os.path.join(RESULTS_DIR, "results.csv"), os.path.join(RESULTS_DIR, "results.json")]:
+        if os.path.isfile(f):
+            os.remove(f)
+
     # ── Step 1: Fetch papers from arXiv ──────────────────────────────────────
     fetch_papers(
-        query    = "LLM efficiency scaling",
+        query    = "LLM efficiency",
         count    = 10,
         year_min = 2020,
         year_max = 2026,
