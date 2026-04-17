@@ -98,7 +98,25 @@ HEADING_PATTERNS = {
     "conclusion":   re.compile(r'(?i)^(?:\d+[\.\s]*)?(?:conclusions?|concluding\s+remarks?|(?:summary|discussion)(?:\s+and\s+conclusions?)?)$'),
 }
 
+# Headings that signal end-of-conclusion — stop collecting without starting a new section
+STOP_PATTERNS = re.compile(
+    r'(?i)^(?:\d+[\.\s]*)?(?:acknowledgem\w*|appendix|references|bibliography|author\s+contributions?|funding|supplementary)[\s\w]*$'
+)
+
 MAX_CONCLUSION_LEN = 6000
+
+
+def _trim_conclusion(text: str) -> str:
+    """Strip acknowledgements, appendix, or reference content that leaked into
+    the conclusion, then collapse runs of whitespace to single spaces/newlines."""
+    # Cut off at any post-conclusion marker appearing at the start of a line
+    text = re.split(
+        r'\n\s*(?:Acknowledgements?|Appendix|References|Bibliography|Author\s+Contributions?|Funding)\b',
+        text, maxsplit=1, flags=re.IGNORECASE
+    )[0]
+    # Collapse 3+ spaces into one (fixes math spacing like "N ,   D ,   C min")
+    text = re.sub(r'  +', ' ', text)
+    return text.strip()
 
 
 def _extract_by_blocks(doc: fitz.Document) -> dict[str, str]:
@@ -151,7 +169,7 @@ def _extract_by_blocks(doc: fitz.Document) -> dict[str, str]:
             # Only accept conclusion from second half of document
             if page_num < total_pages // 2:
                 return
-            content = content[:MAX_CONCLUSION_LEN]
+            content = _trim_conclusion(content)[:MAX_CONCLUSION_LEN]
             sections[section] = content  # always overwrite — take last match
         else:
             if not sections[section]:    # take first valid match
@@ -167,6 +185,11 @@ def _extract_by_blocks(doc: fitz.Document) -> dict[str, str]:
             continue
 
         if size >= heading_threshold:
+            if STOP_PATTERNS.match(clean):
+                _flush(current_section, buffer, page_num)
+                current_section = None
+                buffer = []
+                continue
             matched = next((name for name, pat in HEADING_PATTERNS.items() if pat.match(clean)), None)
             if matched:
                 _flush(current_section, buffer, page_num)
@@ -283,6 +306,7 @@ def extract_sections(full_text: str, doc: fitz.Document) -> dict[str, str]:
                 continue
             text = m.group(1).strip()
             # Cap length to avoid grabbing the entire rest of the paper
+            text = _trim_conclusion(text)
             if len(text) > MAX_CONCLUSION_LEN:
                 text = text[:MAX_CONCLUSION_LEN]
             if len(text) >= MIN_SECTION_LEN and not _is_toc_content(text):

@@ -27,6 +27,8 @@ C - Other           : Primary contribution is clearly neither efficiency nor sca
 
 IMPORTANT: If the paper improves efficiency IN ORDER TO scale larger → B (Scaling).
            If the paper reduces cost of running existing model sizes → A (Efficiency).
+           If the paper releases a smaller open model that matches larger ones → A (Efficiency),
+           because the goal is accessible, cheaper deployment — not pushing capability frontiers.
 
 ---
 EXAMPLES
@@ -44,8 +46,8 @@ Stage1: C
 Reasoning: Proposes a benchmark to evaluate LLM knowledge across 57 subjects — evaluation contribution, not efficiency or scaling.
 
 Title: LLaMA: Open and Efficient Foundation Language Models
-Stage1: B
-Reasoning: Trains 7B-65B foundation models and shows smaller models trained longer match larger ones — primarily about compute-optimal scaling, not reducing inference cost.
+Stage1: A
+Reasoning: Releases 7B-65B open models trained longer on more tokens to match larger proprietary models — primary goal is accessible, efficient deployment on fewer GPUs, not pushing capability frontiers.
 
 Title: SparseGPT: Massive Language Models Can be Accurately Pruned in One-Shot
 Stage1: A
@@ -73,11 +75,23 @@ LLM Efficiency
   Techniques: quantization, pruning, distillation, LoRA/PEFT, sparse activation,
               efficient attention (FlashAttention), early exit, gradient checkpointing.
 
+  Efficiency covers four areas:
+    (1) Training efficiency   : LoRA/PEFT, data-efficient training, fewer tokens to match performance
+    (2) Architectural eff.   : FlashAttention, Multi-Query Attention (MQA), Group Query Attention (GQA), sparse/MoE designs
+    (3) Inference efficiency  : quantization (INT4/INT8), pruning, distillation, lower latency, higher throughput
+    (4) Hardware utilization  : GPU memory reduction, cost per token, running on fewer/cheaper GPUs
+
 LLM Scaling
   The paper's PRIMARY goal is understanding or pushing LLM capability through scale —
   training larger models, studying how performance grows, finding compute-optimal strategies.
   Techniques: scaling laws, emergent ability studies, compute-optimal training,
               large model training (GPT-3, PaLM, Chinchilla), data scaling.
+
+  Scaling key signals:
+    - Power-law curves: performance vs N (parameters), D (data tokens), C (compute FLOPs)
+    - Emergent abilities: capabilities that only appear above a certain scale threshold
+    - Compute-optimal strategies: finding the best N/D ratio for a given compute budget
+    - Training stability at scale: techniques to prevent loss spikes in very large runs
 
 ---
 HOW TO DECIDE WHEN IT IS AMBIGUOUS
@@ -87,10 +101,13 @@ Ask: What problem is this paper written to solve?
   → "We want more capable models"                        → Scaling
   → "We want to train larger models without more money"  → Scaling (goal is capability)
   → "We want the same model to run on cheaper hardware"  → Efficiency (goal is cost)
+  → "We release a smaller open model that matches a larger one" → Efficiency (accessible deployment)
 
 Specific hard cases:
   - Compute-optimal training (e.g. Chinchilla) → Scaling. The goal is better models, not cheaper inference.
   - LoRA, QLoRA, PEFT methods → Efficiency. The goal is cheaper fine-tuning of existing sizes.
+  - LLaMA-style models (smaller models trained longer on more tokens) → Efficiency. The goal is
+    matching existing capability at lower deployment cost — open, accessible models on fewer GPUs.
   - Mixture of Experts — depends on framing:
       "Sparse activation reduces FLOPs per token" → Efficiency
       "MoE lets us train effectively larger models" → Scaling
@@ -132,13 +149,13 @@ Category: LLM Efficiency
 Confidence: 84
 Justification: LoRA's core contribution is making fine-tuning of large models computationally accessible by reducing trainable parameters via low-rank decomposition. The paper's stated goal is cost reduction — not making models more capable. One could argue this is a training method, but the efficiency framing is primary.
 
-Example 4 — Ambiguous, Scaling wins
+Example 4 — Ambiguous, Efficiency wins
 Title: LLaMA: Open and Efficient Foundation Language Models
-Screening note: Initial screen said Scaling.
-Reasoning: LLaMA's key finding is that smaller models trained significantly longer on more tokens match larger models — a compute-optimal scaling study. The efficiency framing ("open and efficient") refers to accessibility, not reducing inference cost. The core contribution is a training and scaling strategy.
-Category: LLM Scaling
-Confidence: 72
-Justification: LLaMA's primary contribution is demonstrating compute-optimal training — that 7B-65B models trained on more tokens can match much larger models trained on fewer tokens. This is a scaling finding about how to allocate compute for maximum capability. The efficiency framing is secondary; the paper's core question is about training strategy for capable foundation models. Genuine ambiguity warrants lower confidence.
+Screening note: Initial screen said Efficiency.
+Reasoning: LLaMA releases 7B-65B open foundation models trained longer on more tokens to match larger proprietary models like GPT-3. The core goal is accessible, efficient deployment — models that run on a single GPU rather than a data center. While the training strategy is compute-optimal, the primary motivation is cost reduction and open access, not pushing capability frontiers.
+Category: LLM Efficiency
+Confidence: 78
+Justification: LLaMA's primary contribution is releasing open models that achieve competitive performance at a fraction of the deployment cost — fitting into training efficiency (longer training on more tokens) and hardware utilization (runs on fewer GPUs). The scaling argument loses because LLaMA is not studying how to get more capable models through scale; it is showing how to match existing capability cheaper. Genuine ambiguity exists because the training strategy echoes Chinchilla, but the framing and goal are firmly efficiency.
 
 ---
 NOW CLASSIFY THE PAPER ABOVE
