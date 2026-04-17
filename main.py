@@ -91,21 +91,6 @@ def get_pdf_files():
     return pdfs
 
 
-def is_already_processed(paper_id: str) -> bool:
-    """Check if a paper has already been classified successfully.
-    Skips reprocessing unless the result was an ERROR.
-    """
-    output_path = os.path.join(OUTPUT_DIR, f"{paper_id}.json")
-    if not os.path.isfile(output_path):
-        return False
-    try:
-        with open(output_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        category = data.get("classification", {}).get("category", "").strip()
-        return bool(category) and category != "ERROR"
-    except (json.JSONDecodeError, IOError):
-        return False
-
 
 def save_results(data):
     os.makedirs(RESULTS_DIR, exist_ok=True)
