@@ -10,9 +10,13 @@ import importlib
 from pipeline.pdf_extractor import process_pdf
 from pipeline.classifier    import process_paper as summarize_paper
 
-_fetcher = importlib.import_module("1_paper_download_onef")
-get_filtered_papers_exact_count = _fetcher.get_filtered_papers_exact_count
-download_pdf_for_paper          = _fetcher.download_pdf_for_paper
+try:
+    _fetcher = importlib.import_module("1_paper_download_onef")
+    get_filtered_papers_exact_count = _fetcher.get_filtered_papers_exact_count
+    download_pdf_for_paper          = _fetcher.download_pdf_for_paper
+    FETCHER_AVAILABLE = True
+except ModuleNotFoundError:
+    FETCHER_AVAILABLE = False
 
 PAPERS_DIR     = "papers/pdf"
 OUTPUT_DIR     = "output"
@@ -198,12 +202,15 @@ def main():
             os.remove(f)
 
     # ── Step 1: Fetch papers from arXiv ──────────────────────────────────────
-    fetch_papers(
-        query    = "LLM efficiency",
-        count    = 10,
-        year_min = 2020,
-        year_max = 2026,
-    )
+    if FETCHER_AVAILABLE:
+        fetch_papers(
+            query    = "LLM efficiency",
+            count    = 10,
+            year_min = 2020,
+            year_max = 2026,
+        )
+    else:
+        print(c("  paper fetcher not available — classifying existing PDFs in papers/pdf/", YELLOW))
 
     # ── Step 2: Classify all downloaded PDFs ──────────────────────────────────
     print()

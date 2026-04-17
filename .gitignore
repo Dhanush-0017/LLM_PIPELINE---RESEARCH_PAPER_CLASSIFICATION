@@ -15,6 +15,3 @@ papers/clean_text/
 venv/
 .venv/
 
-# Teammate's files — managed in paper_fetcher branch
-1_paper_download_onef.py
-paperscraper_client.py
