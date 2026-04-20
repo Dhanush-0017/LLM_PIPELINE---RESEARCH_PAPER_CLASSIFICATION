@@ -189,8 +189,23 @@ Examples of good labels:
   Other — Model Architecture
   Other — Training & Alignment
   Other — Benchmark / Evaluation
+  Other — Evaluation Methodology
   Other — Multimodal
   Other — Domain Application
+  Other — Interpretability
+  Other — Retrieval Augmented Generation
+  Other — Training Optimization
+
+CHOOSING THE RIGHT SUB-LABEL:
+  - Paper measures/evaluates how models perform → Benchmark / Evaluation
+  - Paper proposes a new way to evaluate or audit models → Evaluation Methodology
+  - Paper explains what happens inside a model → Interpretability
+  - Paper applies LLMs to a specific field (medicine, law, code) → Domain Application
+  - Paper uses RAG as the primary contribution → Retrieval Augmented Generation
+  - Paper proposes a new fine-tuning or training method → Training Optimization
+  - Paper combines text with images/audio/video → Multimodal
+  - Paper introduces a new model structure → Model Architecture
+  - Paper aligns models with human preferences (RLHF, DPO) → Training & Alignment
 
 ---
 EXAMPLES
@@ -206,6 +221,24 @@ Reasoning: The paper proposes the Transformer — a new sequence model architect
 Category: Other — Model Architecture
 Confidence: 98
 Justification: This paper introduces the Transformer architecture, replacing recurrent models with pure self-attention. It is not an efficiency or scaling contribution.
+
+Title: Diagnosing LLM Judge Reliability: Conformal Prediction Sets and Transitivity Violations
+Reasoning: The paper proposes new methods to measure and diagnose reliability of LLM-as-judge systems — a meta-evaluation contribution, not efficiency or scaling.
+Category: Other — Evaluation Methodology
+Confidence: 95
+Justification: This paper introduces conformal prediction and transitivity checks as tools to audit LLM judges. The primary contribution is a new evaluation framework, not a model or training advance.
+
+Title: How Do LLMs Understand Viewpoint Rotation Without Vision? An Interpretability Study
+Reasoning: The paper probes internal representations of LLMs to understand how they process spatial concepts — an interpretability study, not efficiency or scaling.
+Category: Other — Interpretability
+Confidence: 94
+Justification: This paper uses probing and head-wise analysis to explain model internals. The contribution is mechanistic understanding of model behavior, not efficiency or scaling.
+
+Title: Enhancing LLMs with Retrieval Augmented Generation for Software Testing
+Reasoning: The paper applies RAG to improve LLM performance on software testing tasks — RAG is the primary technical contribution applied to a domain.
+Category: Other — Retrieval Augmented Generation
+Confidence: 93
+Justification: The core contribution is the RAG pipeline design, not a new model architecture or efficiency technique. It is applied to a specific domain but the method is RAG-centric.
 
 ---
 Reply in this EXACT format — no extra text, no markdown:
