@@ -5,23 +5,13 @@ import json
 import glob
 import textwrap
 
-import importlib
-
 from pipeline.pdf_extractor import process_pdf
 from pipeline.classifier    import process_paper as summarize_paper
 
-try:
-    _fetcher = importlib.import_module("1_paper_download_onef")
-    get_filtered_papers_exact_count = _fetcher.get_filtered_papers_exact_count
-    download_pdf_for_paper          = _fetcher.download_pdf_for_paper
-    FETCHER_AVAILABLE = True
-except ModuleNotFoundError:
-    FETCHER_AVAILABLE = False
-
-PAPERS_DIR     = "papers/pdf"
-OUTPUT_DIR     = "output"
-CLEAN_TEXT_DIR = "papers/clean_text"
-RESULTS_DIR    = "results"
+PAPERS_DIR     = "/data/project/efficiency_scaling/downloaded_pdfs"
+OUTPUT_DIR     = "/data/project/efficiency_scaling/output"
+CLEAN_TEXT_DIR = "/data/project/efficiency_scaling/clean_text"
+RESULTS_DIR    = "/data/project/efficiency_scaling/results"
 HEADERS        = ["paper_id", "title", "classification", "accuracy", "justification"]
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -50,38 +40,6 @@ def conf_bar(confidence):
     return c("█" * filled + "░" * (16 - filled), colour) + c(f"  {val}%", BOLD)
 
 
-# ── Fetch papers from arXiv ───────────────────────────────────────────────────
-def fetch_papers(query, count, year_min, year_max):
-    print()
-    print(f"  {c('fetching papers from arXiv', BOLD, WHITE)}")
-    print(c("  " + "─" * 54, GRAY))
-    print(f"  query      {c(query, CYAN)}")
-    print(f"  count      {c(count, CYAN, BOLD)}")
-    print(f"  years      {c(f'{year_min} – {year_max}', CYAN)}")
-    print()
-
-    papers = get_filtered_papers_exact_count(
-        query=query,
-        target_count=count,
-        year_min=year_min,
-        year_max=year_max,
-        cite_min=0,
-    )
-
-    print(f"  {c(str(len(papers)), CYAN, BOLD)} paper(s) found")
-    print()
-
-    for i, paper in enumerate(papers, start=1):
-        print(f"  {c(f'[{i}/{len(papers)}]', GRAY)}  {c(paper['title'], WHITE)}", end="  ", flush=True)
-        try:
-            download_pdf_for_paper(paper, output_dir=PAPERS_DIR)
-            print(c("downloaded", GREEN))
-        except (RuntimeError, ValueError) as e:
-            print(c(f"failed — {e}", RED))
-
-    print()
-
-
 # ── File helpers ──────────────────────────────────────────────────────────────
 def get_pdf_files():
     pdfs = glob.glob(os.path.join(PAPERS_DIR, "*.pdf"))
@@ -89,7 +47,6 @@ def get_pdf_files():
         print(c(f"\n  no PDFs found in '{PAPERS_DIR}/'", RED))
         sys.exit(1)
     return pdfs
-
 
 
 def save_results(data):
@@ -186,18 +143,7 @@ def main():
         if os.path.isfile(f):
             os.remove(f)
 
-    # ── Step 1: Fetch papers from arXiv ──────────────────────────────────────
-    if FETCHER_AVAILABLE:
-        fetch_papers(
-            query    = "LLM efficiency",
-            count    = 10,
-            year_min = 2020,
-            year_max = 2026,
-        )
-    else:
-        print(c("  paper fetcher not available — classifying existing PDFs in papers/pdf/", YELLOW))
-
-    # ── Step 2: Classify all downloaded PDFs ──────────────────────────────────
+    # ── Classify all PDFs in the shared folder ────────────────────────────────
     print()
     print(f"  {c('research paper analysis', BOLD, WHITE)}")
     print(c("  " + "─" * 54, GRAY))
@@ -226,7 +172,7 @@ def main():
         f"{c(str(n_review), YELLOW, BOLD)} needs review",
     ]
     print("  " + "  ·  ".join(parts))
-    print(f"  {c('saved', DIM)}  →  results/results.csv  &  results.json")
+    print(f"  {c('saved', DIM)}  ->  {RESULTS_DIR}/results.csv  &  results.json")
     print()
 
 
